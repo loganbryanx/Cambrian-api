@@ -76,3 +76,12 @@ If you encounter any issues with deployment or frontend integration, see [TROUBL
 - Reporting template for getting help
 
 You can also create a [deployment issue](https://github.com/loganbryanx/Cambrian-api/issues/new?template=deployment-issue.md) with all the required information.
+
+## Verification
+
+After deployment, use [VERIFICATION.md](VERIFICATION.md) to verify your deployment is working correctly:
+- Step-by-step checklist for verifying Render API health
+- Vercel environment variable verification
+- CORS configuration verification
+- Frontend integration testing (signup → Discover → Save → Library)
+- Automated verification script available in `scripts/verify-deployment.sh`

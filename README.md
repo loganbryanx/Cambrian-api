@@ -42,6 +42,16 @@ docker compose up -d
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for information on deploying to Render and configuring CORS for production.
 
+## Verification
+
+After deployment, see [VERIFICATION.md](VERIFICATION.md) for step-by-step verification:
+- Confirm Render API health check works
+- Verify Vercel environment variables
+- Test CORS configuration
+- Test frontend flow: Signup → Discover → Save → Library
+
+Quick verification script available: `./scripts/verify-deployment.sh`
+
 ## Troubleshooting
 
 If you encounter deployment or integration issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for help with:
