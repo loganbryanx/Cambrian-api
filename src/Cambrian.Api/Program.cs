@@ -150,6 +150,20 @@ app.MapGet("/purchase/library", (HttpRequest request) =>
     return Results.Ok(library);
 }).WithName("PurchaseLibrary");
 
+app.MapPost("/purchase/library", (HttpRequest request, SaveLibraryRequest payload) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? "member@cambrian.local";
+    if (!licensesByEmail.TryGetValue(email, out var items))
+    {
+        items = new List<LicenseRecord>();
+        licensesByEmail[email] = items;
+    }
+
+    var title = payload.Title ?? publishedCatalog.FirstOrDefault(t => t.Id == payload.TrackId)?.Title ?? "Saved track";
+    items.Add(new LicenseRecord(Guid.NewGuid().ToString("N"), title, "Saved", DateOnly.FromDateTime(DateTime.UtcNow)));
+    return Results.Ok(items);
+}).WithName("PurchaseLibrarySave");
+
 app.MapGet("/stream", (HttpRequest request) =>
 {
     var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
@@ -315,6 +329,8 @@ record StreamStopRequest(string StreamId);
 record CatalogTrack(string Id, string Title, string Artist, string Genre, decimal Price, string Rights);
 
 record LicenseRecord(string Id, string Title, string Status, DateOnly PurchasedOn);
+
+record SaveLibraryRequest(string TrackId, string? Title, string? Artist);
 
 class StreamSession
 {
