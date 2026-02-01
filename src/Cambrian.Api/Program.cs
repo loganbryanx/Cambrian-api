@@ -28,6 +28,12 @@ var users = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 var accounts = new Dictionary<string, AccountRecord>(StringComparer.OrdinalIgnoreCase);
 var systemInfo = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 var secrets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+var catalogsByEmail = new Dictionary<string, List<CatalogTrack>>(StringComparer.OrdinalIgnoreCase);
+var licensesByEmail = new Dictionary<string, List<LicenseRecord>>(StringComparer.OrdinalIgnoreCase);
+var streamsByEmail = new Dictionary<string, List<StreamSession>>(StringComparer.OrdinalIgnoreCase);
+var aiTracksByEmail = new Dictionary<string, List<AiTrack>>(StringComparer.OrdinalIgnoreCase);
+var salesByEmail = new Dictionary<string, List<SaleRecord>>(StringComparer.OrdinalIgnoreCase);
+var subscriptionsByEmail = new Dictionary<string, SubscriptionRecord>(StringComparer.OrdinalIgnoreCase);
 
 app.MapGet("/auth/health", () => Results.Ok(new { status = "ok" }))
     .WithName("AuthHealth");
@@ -55,6 +61,7 @@ app.MapPost("/auth/register", (AuthRequest request) =>
         Membership = "Verified"
     };
     accounts[request.Email] = account;
+    ApiHelpers.SeedCreatorData(request.Email, catalogsByEmail, licensesByEmail, streamsByEmail, aiTracksByEmail, salesByEmail, subscriptionsByEmail);
 
     return Results.Ok(new { token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()) });
 }).WithName("Register");
@@ -89,6 +96,118 @@ app.MapGet("/data/account", (HttpRequest request) =>
 
     return Results.Ok(fallback);
 }).WithName("Account");
+
+app.MapGet("/catalog", (HttpRequest request) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
+    var catalog = email != null && catalogsByEmail.TryGetValue(email, out var items) ? items : new List<CatalogTrack>();
+    return Results.Ok(catalog);
+}).WithName("Catalog");
+
+app.MapGet("/discover", (HttpRequest request) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
+    var catalog = email != null && catalogsByEmail.TryGetValue(email, out var items) ? items : new List<CatalogTrack>();
+    return Results.Ok(catalog.Take(6));
+}).WithName("Discover");
+
+app.MapGet("/purchase/health", () => Results.Ok(new { status = "ok" }))
+    .WithName("PurchaseHealth");
+
+app.MapGet("/purchase/library", (HttpRequest request) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
+    var library = email != null && licensesByEmail.TryGetValue(email, out var items) ? items : new List<LicenseRecord>();
+    return Results.Ok(library);
+}).WithName("PurchaseLibrary");
+
+app.MapGet("/stream", (HttpRequest request) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
+    var sessions = email != null && streamsByEmail.TryGetValue(email, out var items) ? items : new List<StreamSession>();
+    return Results.Ok(sessions);
+}).WithName("StreamList");
+
+app.MapPost("/stream/start", (HttpRequest request, StreamStartRequest payload) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? "member@cambrian.local";
+    if (!streamsByEmail.TryGetValue(email, out var sessions))
+    {
+        sessions = new List<StreamSession>();
+        streamsByEmail[email] = sessions;
+    }
+
+    var session = new StreamSession
+    {
+        Id = Guid.NewGuid().ToString("N"),
+        Title = payload.Title ?? "Creator session",
+        Status = "Live",
+        StartedAt = DateTimeOffset.UtcNow
+    };
+    sessions.Add(session);
+    return Results.Ok(session);
+}).WithName("StreamStart");
+
+app.MapPost("/stream/stop", (HttpRequest request, StreamStopRequest payload) =>
+{
+    var email = ApiHelpers.GetEmail(request);
+    if (email != null && streamsByEmail.TryGetValue(email, out var sessions))
+    {
+        var session = sessions.FirstOrDefault(s => s.Id == payload.StreamId);
+        if (session != null) session.Status = "Ended";
+    }
+    return Results.Ok(new { status = "stopped" });
+}).WithName("StreamStop");
+
+app.MapGet("/stream/community", (HttpRequest request) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
+    var sessions = email != null && streamsByEmail.TryGetValue(email, out var items) ? items : new List<StreamSession>();
+    return Results.Ok(sessions);
+}).WithName("StreamCommunity");
+
+app.MapGet("/ai/trending", (HttpRequest request) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
+    var tracks = email != null && aiTracksByEmail.TryGetValue(email, out var items) ? items : new List<AiTrack>();
+    return Results.Ok(tracks);
+}).WithName("AiTrending");
+
+app.MapGet("/ai/creator/tracks", (HttpRequest request) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
+    var tracks = email != null && aiTracksByEmail.TryGetValue(email, out var items) ? items : new List<AiTrack>();
+    return Results.Ok(tracks);
+}).WithName("AiCreatorTracks");
+
+app.MapGet("/ai/creator/revenue", (HttpRequest request) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
+    var sales = email != null && salesByEmail.TryGetValue(email, out var items) ? items : new List<SaleRecord>();
+    var amount = sales.Sum(s => s.Amount);
+    return Results.Ok(new { amount });
+}).WithName("AiCreatorRevenue");
+
+app.MapGet("/marketplace/sales", (HttpRequest request) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
+    var sales = email != null && salesByEmail.TryGetValue(email, out var items) ? items : new List<SaleRecord>();
+    return Results.Ok(sales);
+}).WithName("MarketplaceSales");
+
+app.MapGet("/subscriptions/current", (HttpRequest request) =>
+{
+    var email = ApiHelpers.GetEmail(request);
+    if (email != null && subscriptionsByEmail.TryGetValue(email, out var sub))
+    {
+        return Results.Ok(sub);
+    }
+
+    return Results.Ok(new SubscriptionRecord("Creator", "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1))));
+}).WithName("SubscriptionCurrent");
+
+app.MapGet("/admin/audit", () => Results.Ok(new { status = "ok" }))
+    .WithName("AdminAudit");
 
 app.MapGet("/data/songs", () => Results.Ok(Array.Empty<object>())).WithName("Songs");
 app.MapPost("/data/songs", (object payload) => Results.Ok(payload)).WithName("AddSong");
@@ -143,6 +262,28 @@ record AuthRequest(string Email, string Password);
 
 record SystemInfoRequest(string Key, string? Value);
 
+record StreamStartRequest(string TrackId, string? Title);
+
+record StreamStopRequest(string StreamId);
+
+record CatalogTrack(string Id, string Title, string Artist, string Genre, decimal Price, string Rights);
+
+record LicenseRecord(string Id, string Title, string Status, DateOnly PurchasedOn);
+
+class StreamSession
+{
+    public string? Id { get; set; }
+    public string? Title { get; set; }
+    public string? Status { get; set; }
+    public DateTimeOffset StartedAt { get; set; }
+}
+
+record AiTrack(string Id, string Title, string Genre, string Tag);
+
+record SaleRecord(string Id, string Title, decimal Amount, DateOnly SoldOn);
+
+record SubscriptionRecord(string Plan, string Status, DateOnly RenewsOn);
+
 class AccountRecord
 {
     public string? Id { get; set; }
@@ -151,4 +292,78 @@ class AccountRecord
     public string? Region { get; set; }
     public string? Status { get; set; }
     public string? Membership { get; set; }
+}
+
+static class ApiHelpers
+{
+    public static string? GetEmail(HttpRequest request)
+    {
+        return request.Headers["x-email"].FirstOrDefault();
+    }
+
+    public static void SeedCreatorData(
+        string email,
+        Dictionary<string, List<CatalogTrack>> catalogs,
+        Dictionary<string, List<LicenseRecord>> licenses,
+        Dictionary<string, List<StreamSession>> streams,
+        Dictionary<string, List<AiTrack>> aiTracks,
+        Dictionary<string, List<SaleRecord>> sales,
+        Dictionary<string, SubscriptionRecord> subscriptions)
+    {
+        if (!catalogs.ContainsKey(email))
+        {
+            catalogs[email] = new List<CatalogTrack>
+            {
+                new CatalogTrack(Guid.NewGuid().ToString("N"), "Neon Echoes", "Creator Studio", "Synthwave", 49m, "Creator-owned"),
+                new CatalogTrack(Guid.NewGuid().ToString("N"), "Aurora Drift", "Creator Studio", "Ambient", 39m, "Creator-owned"),
+                new CatalogTrack(Guid.NewGuid().ToString("N"), "Circuit Bloom", "Creator Studio", "Electro", 59m, "Creator-owned")
+            };
+        }
+
+        if (!licenses.ContainsKey(email))
+        {
+            licenses[email] = new List<LicenseRecord>
+            {
+                new LicenseRecord(Guid.NewGuid().ToString("N"), "Neon Echoes", "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-2))),
+                new LicenseRecord(Guid.NewGuid().ToString("N"), "Aurora Drift", "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-10)))
+            };
+        }
+
+        if (!streams.ContainsKey(email))
+        {
+            streams[email] = new List<StreamSession>
+            {
+                new StreamSession
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Title = "Creator Launch Stream",
+                    Status = "Live",
+                    StartedAt = DateTimeOffset.UtcNow.AddMinutes(-42)
+                }
+            };
+        }
+
+        if (!aiTracks.ContainsKey(email))
+        {
+            aiTracks[email] = new List<AiTrack>
+            {
+                new AiTrack(Guid.NewGuid().ToString("N"), "Midnight Atlas", "Synthwave", "Creator"),
+                new AiTrack(Guid.NewGuid().ToString("N"), "Solar Bloom", "Ambient", "Creator")
+            };
+        }
+
+        if (!sales.ContainsKey(email))
+        {
+            sales[email] = new List<SaleRecord>
+            {
+                new SaleRecord(Guid.NewGuid().ToString("N"), "Neon Echoes", 49m, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1))),
+                new SaleRecord(Guid.NewGuid().ToString("N"), "Aurora Drift", 39m, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-3)))
+            };
+        }
+
+        if (!subscriptions.ContainsKey(email))
+        {
+            subscriptions[email] = new SubscriptionRecord("Creator", "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1)));
+        }
+    }
 }
