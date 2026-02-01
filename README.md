@@ -40,9 +40,20 @@ docker compose up -d
 
 ## Deployment
 
-### Backend API Deployment
-- See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for deploying this API (recommended platforms: Azure, AWS, Railway)
+### Backend API (This Repository)
+This .NET API should be deployed to a platform that supports ASP.NET Core:
+- **Azure App Service** - Native .NET support (Recommended)
+- **AWS Elastic Beanstalk** - Container or native support
+- **Railway** - Docker support with generous free tier
+- **Render** - Docker support
+- **Fly.io** - Docker support
 
-### Frontend Deployment to Vercel
-- See [FRONTEND_VERCEL_DEPLOYMENT.md](FRONTEND_VERCEL_DEPLOYMENT.md) for deploying the Vite frontend (cambrian-app)
-- See [CORS_CONFIGURATION.md](CORS_CONFIGURATION.md) for connecting frontend to this API
+Use the included `Dockerfile` for containerized deployments.
+
+### Frontend App (cambrian-app repository)
+The Vite frontend should be deployed to **Vercel**:
+- See [FRONTEND_VERCEL_DEPLOYMENT.md](FRONTEND_VERCEL_DEPLOYMENT.md) - Complete guide for deploying the frontend
+- See [CORS_CONFIGURATION.md](CORS_CONFIGURATION.md) - Configure this API to accept requests from Vercel
+- See [frontend-vercel.json](frontend-vercel.json) - Sample configuration file for the frontend repo
+
+**Architecture**: Frontend on Vercel → Backend on Azure/AWS/Railway
