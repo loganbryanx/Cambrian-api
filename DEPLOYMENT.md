@@ -1,5 +1,7 @@
 # Deployment (Render)
 
+> **Note**: This is the deployment guide for the Cambrian API only. For frontend deployment, see the cambrian-frontend repository. For infrastructure management, see the cambrian-infra repository.
+
 This API is configured to deploy on Render using Docker.
 
 ## Create the service
@@ -40,3 +42,14 @@ Expected:
 ## Troubleshooting
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+## Cross-Repository Configuration
+
+When deploying the full Cambrian ecosystem:
+
+1. **Deploy the API first** (this repository) and note the deployed URL
+2. **Configure CORS_ORIGINS** to include the frontend domain
+3. **Deploy the frontend** (cambrian-frontend) with the API URL
+4. **Verify integration** by testing API calls from the frontend
+
+Each repository deploys independently, but they need to be configured to work together. See [ORGANIZATION.md](ORGANIZATION.md) for more details about the repository structure.
