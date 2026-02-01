@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: cambrian-api
+    runtime: docker
+    plan: free
+    rootDir: /
+    healthCheckPath: /auth/health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://+:3000
