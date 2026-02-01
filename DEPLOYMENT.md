@@ -17,6 +17,13 @@ Set in Render → Environment:
 
 - ASPNETCORE_ENVIRONMENT=Production
 - ASPNETCORE_URLS=http://+:3000
+- CORS_ORIGINS=https://YOUR-VERCEL-APP.vercel.app
+- STRIPE_SECRET_KEY=sk_live_...
+- STRIPE_LISTENER_PRICE_ID=price_...
+- STRIPE_CREATOR_PRICE_ID=price_...
+- STRIPE_SUCCESS_URL=https://YOUR-VERCEL-APP.vercel.app/account?status=success
+- STRIPE_CANCEL_URL=https://YOUR-VERCEL-APP.vercel.app/account?status=cancel
+- STRIPE_WEBHOOK_SECRET=whsec_...
 
 ## Verify
 

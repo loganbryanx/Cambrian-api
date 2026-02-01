@@ -1,3 +1,6 @@
+using Stripe;
+using Stripe.Checkout;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -7,7 +10,12 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevCors", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+        var configured = builder.Configuration["CORS_ORIGINS"];
+        var origins = string.IsNullOrWhiteSpace(configured)
+            ? new[] { "http://localhost:5173", "http://localhost:5174" }
+            : configured.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        policy.WithOrigins(origins)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -40,6 +48,18 @@ var streamsByEmail = new Dictionary<string, List<StreamSession>>(StringComparer.
 var aiTracksByEmail = new Dictionary<string, List<AiTrack>>(StringComparer.OrdinalIgnoreCase);
 var salesByEmail = new Dictionary<string, List<SaleRecord>>(StringComparer.OrdinalIgnoreCase);
 var subscriptionsByEmail = new Dictionary<string, SubscriptionRecord>(StringComparer.OrdinalIgnoreCase);
+
+StripeConfiguration.ApiKey = builder.Configuration["STRIPE_SECRET_KEY"];
+
+static bool IsStripeConfigured(IConfiguration config)
+{
+    return !string.IsNullOrWhiteSpace(config["STRIPE_SECRET_KEY"])
+           && !string.IsNullOrWhiteSpace(config["STRIPE_LISTENER_PRICE_ID"])
+           && !string.IsNullOrWhiteSpace(config["STRIPE_CREATOR_PRICE_ID"])
+           && !string.IsNullOrWhiteSpace(config["STRIPE_SUCCESS_URL"])
+           && !string.IsNullOrWhiteSpace(config["STRIPE_CANCEL_URL"])
+           && !string.IsNullOrWhiteSpace(config["STRIPE_WEBHOOK_SECRET"]);
+}
 
 app.MapGet("/auth/health", () => Results.Ok(new { status = "ok" }))
     .WithName("AuthHealth");
@@ -252,6 +272,85 @@ app.MapGet("/subscriptions/current", (HttpRequest request) =>
 app.MapGet("/subscriptions/plans", () => Results.Ok(ApiHelpers.GetPlans()))
     .WithName("SubscriptionPlans");
 
+app.MapPost("/billing/checkout-session", async (HttpRequest request, CheckoutRequest payload, IConfiguration config) =>
+{
+    if (!IsStripeConfigured(config))
+    {
+        return Results.Problem("Stripe is not configured.");
+    }
+
+    var email = ApiHelpers.GetEmail(request) ?? payload.Email ?? "member@cambrian.local";
+    var planName = string.IsNullOrWhiteSpace(payload.Plan) ? "Listener" : payload.Plan;
+    var priceId = planName.Equals("Creator", StringComparison.OrdinalIgnoreCase)
+        ? config["STRIPE_CREATOR_PRICE_ID"]
+        : config["STRIPE_LISTENER_PRICE_ID"];
+
+    var options = new SessionCreateOptions
+    {
+        Mode = "subscription",
+        SuccessUrl = config["STRIPE_SUCCESS_URL"],
+        CancelUrl = config["STRIPE_CANCEL_URL"],
+        CustomerEmail = email,
+        LineItems = new List<SessionLineItemOptions>
+        {
+            new()
+            {
+                Price = priceId,
+                Quantity = 1
+            }
+        },
+        Metadata = new Dictionary<string, string>
+        {
+            ["plan"] = planName,
+            ["email"] = email
+        }
+    };
+
+    var service = new SessionService();
+    var session = await service.CreateAsync(options);
+    return Results.Ok(new { url = session.Url });
+}).WithName("CreateCheckoutSession");
+
+app.MapPost("/billing/webhook", async (HttpRequest request, IConfiguration config) =>
+{
+    if (!IsStripeConfigured(config))
+    {
+        return Results.Problem("Stripe is not configured.");
+    }
+
+    var json = await new StreamReader(request.Body).ReadToEndAsync();
+    var signature = request.Headers["Stripe-Signature"].ToString();
+    Event stripeEvent;
+
+    try
+    {
+        stripeEvent = EventUtility.ConstructEvent(json, signature, config["STRIPE_WEBHOOK_SECRET"]);
+    }
+    catch (Exception)
+    {
+        return Results.BadRequest();
+    }
+
+    if (stripeEvent.Type == EventTypes.CheckoutSessionCompleted)
+    {
+        if (stripeEvent.Data.Object is Session session)
+        {
+            var email = session.CustomerEmail ?? session.Metadata?.GetValueOrDefault("email");
+            var planName = session.Metadata?.GetValueOrDefault("plan") ?? "Listener";
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                var planDefinition = ApiHelpers.GetPlans().FirstOrDefault(p => p.Plan.Equals(planName, StringComparison.OrdinalIgnoreCase));
+                var subscription = planDefinition != null
+                    ? new SubscriptionRecord(planDefinition.Plan, "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1)), planDefinition.PriceMonthly, planDefinition.Features)
+                    : ApiHelpers.GetDefaultPlan();
+                subscriptionsByEmail[email] = subscription;
+            }
+        }
+    }
+
+    return Results.Ok();
+}).WithName("StripeWebhook");
+
 app.MapPost("/subscriptions/update", (HttpRequest request, SubscriptionUpdateRequest payload) =>
 {
     var email = ApiHelpers.GetEmail(request) ?? "member@cambrian.local";
@@ -347,6 +446,8 @@ record SaleRecord(string Id, string Title, decimal Amount, DateOnly SoldOn);
 record SubscriptionRecord(string Plan, string Status, DateOnly RenewsOn, decimal PriceMonthly, string[] Features);
 
 record SubscriptionUpdateRequest(string? Plan);
+
+record CheckoutRequest(string? Plan, string? Email);
 
 class AccountRecord
 {
