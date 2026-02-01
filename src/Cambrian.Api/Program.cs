@@ -29,6 +29,12 @@ var accounts = new Dictionary<string, AccountRecord>(StringComparer.OrdinalIgnor
 var systemInfo = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 var secrets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 var catalogsByEmail = new Dictionary<string, List<CatalogTrack>>(StringComparer.OrdinalIgnoreCase);
+var publishedCatalog = new List<CatalogTrack>
+{
+    new CatalogTrack(Guid.NewGuid().ToString("N"), "Aurora Run", "Skyline Audio", "Ambient", 29m, "Creator-owned"),
+    new CatalogTrack(Guid.NewGuid().ToString("N"), "Pulse Index", "Nova Loop", "Electro", 39m, "Creator-owned"),
+    new CatalogTrack(Guid.NewGuid().ToString("N"), "Echo Bloom", "Signal North", "Chill", 25m, "Creator-owned")
+};
 var licensesByEmail = new Dictionary<string, List<LicenseRecord>>(StringComparer.OrdinalIgnoreCase);
 var streamsByEmail = new Dictionary<string, List<StreamSession>>(StringComparer.OrdinalIgnoreCase);
 var aiTracksByEmail = new Dictionary<string, List<AiTrack>>(StringComparer.OrdinalIgnoreCase);
@@ -100,15 +106,23 @@ app.MapGet("/data/account", (HttpRequest request) =>
 app.MapGet("/catalog", (HttpRequest request) =>
 {
     var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
-    var catalog = email != null && catalogsByEmail.TryGetValue(email, out var items) ? items : new List<CatalogTrack>();
-    return Results.Ok(catalog);
+    if (email != null && catalogsByEmail.TryGetValue(email, out var items) && items.Count > 0)
+    {
+        return Results.Ok(items);
+    }
+
+    return Results.Ok(publishedCatalog);
 }).WithName("Catalog");
 
 app.MapGet("/discover", (HttpRequest request) =>
 {
     var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
-    var catalog = email != null && catalogsByEmail.TryGetValue(email, out var items) ? items : new List<CatalogTrack>();
-    return Results.Ok(catalog.Take(6));
+    if (email != null && catalogsByEmail.TryGetValue(email, out var items) && items.Count > 0)
+    {
+        return Results.Ok(items.Take(6));
+    }
+
+    return Results.Ok(publishedCatalog.Take(6));
 }).WithName("Discover");
 
 app.MapGet("/purchase/health", () => Results.Ok(new { status = "ok" }))
