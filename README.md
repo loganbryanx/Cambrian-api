@@ -37,3 +37,11 @@ dotnet run --project src/Cambrian.Api
 ```bash
 docker compose up -d
 ```
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Troubleshooting
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
