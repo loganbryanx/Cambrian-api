@@ -27,6 +27,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate AWS secrets
+        run: |
+          if [ -z "${{ secrets.AWS_REGION }}" ]; then
+            echo "::error::AWS_REGION secret is not configured. See DEPLOYMENT-AWS.md for setup instructions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "::error::AWS_ACCESS_KEY_ID secret is not configured. See DEPLOYMENT-AWS.md for setup instructions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "::error::AWS_SECRET_ACCESS_KEY secret is not configured. See DEPLOYMENT-AWS.md for setup instructions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.ECR_REPOSITORY }}" ]; then
+            echo "::error::ECR_REPOSITORY secret is not configured. See DEPLOYMENT-AWS.md for setup instructions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.ECS_CLUSTER }}" ]; then
+            echo "::error::ECS_CLUSTER secret is not configured. See DEPLOYMENT-AWS.md for setup instructions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.ECS_SERVICE }}" ]; then
+            echo "::error::ECS_SERVICE secret is not configured. See DEPLOYMENT-AWS.md for setup instructions."
+            exit 1
+          fi
+          echo "✅ All required AWS secrets are configured"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:

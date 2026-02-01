@@ -40,7 +40,8 @@ docker compose up -d
 
 ## Deployment
 
-See [DEPLOYMENT.md](DEPLOYMENT.md).
+- **Render (Recommended for simple setup):** See [DEPLOYMENT.md](DEPLOYMENT.md)
+- **AWS ECS (For production with GitHub Actions CI/CD):** See [DEPLOYMENT-AWS.md](DEPLOYMENT-AWS.md)
 
 ## Troubleshooting
 
