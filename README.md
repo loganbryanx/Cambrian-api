@@ -37,3 +37,14 @@ dotnet run --project src/Cambrian.Api
 ```bash
 docker compose up -d
 ```
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for information on deploying to Render and configuring CORS for production.
+
+## Troubleshooting
+
+If you encounter deployment or integration issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for help with:
+- Gathering deployment URLs
+- Capturing console errors
+- Common issues and solutions
