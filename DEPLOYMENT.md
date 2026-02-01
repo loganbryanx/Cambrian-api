@@ -66,3 +66,13 @@ If you encounter CORS errors, ensure:
 - The URL includes the correct protocol (https://)
 - There are no trailing slashes in the URLs
 - The service has been redeployed after changing environment variables
+
+## Troubleshooting
+
+If you encounter any issues with deployment or frontend integration, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for:
+- How to gather Render API URL and Vercel URL
+- How to capture console errors and server logs
+- Common issues and solutions
+- Reporting template for getting help
+
+You can also create a [deployment issue](https://github.com/loganbryanx/Cambrian-api/issues/new?template=deployment-issue.md) with all the required information.
