@@ -2,6 +2,12 @@
 
 ASP.NET Core API organized by clean architecture layers.
 
+## Related Repositories
+
+- Frontend: https://github.com/Cambrian/cambrian-frontend
+- API: https://github.com/Cambrian/cambrian-api
+- Infrastructure: https://github.com/Cambrian/cambrian-infra
+
 ## Structure
 
 - src/
