@@ -5,13 +5,13 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cambrian.Api", "src\Cambrian.Api\Cambrian.Api.csproj", "{0D85E217-D3C0-4FFF-AE08-4664C1057792}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cambrian.Api", "src\auth\Cambrian.Api\Cambrian.Api.csproj", "{0D85E217-D3C0-4FFF-AE08-4664C1057792}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cambrian.Application", "src\Cambrian.Application\Cambrian.Application.csproj", "{B6F3E7B8-A11A-470C-A796-D97548C39A9D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cambrian.Application", "src\music\Cambrian.Application\Cambrian.Application.csproj", "{B6F3E7B8-A11A-470C-A796-D97548C39A9D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cambrian.Domain", "src\Cambrian.Domain\Cambrian.Domain.csproj", "{FCE9A217-ACE1-45D0-B36E-4C5CA4ABBE4A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cambrian.Domain", "src\users\Cambrian.Domain\Cambrian.Domain.csproj", "{FCE9A217-ACE1-45D0-B36E-4C5CA4ABBE4A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cambrian.Infrastructure", "src\Cambrian.Infrastructure\Cambrian.Infrastructure.csproj", "{71C87245-2AD0-47BD-852F-26A8C3D94A96}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cambrian.Infrastructure", "src\payments\Cambrian.Infrastructure\Cambrian.Infrastructure.csproj", "{71C87245-2AD0-47BD-852F-26A8C3D94A96}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject

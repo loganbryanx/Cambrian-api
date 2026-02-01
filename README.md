@@ -29,13 +29,13 @@ dotnet test
 ```
 
 ```bash
-dotnet run --project src/Cambrian.Api
+dotnet run --project src/auth/Cambrian.Api
 ```
 
 ## Database
 
 ```bash
-docker compose up -d
+docker compose -f docker/docker-compose.yml up -d
 ```
 
 ## Deployment

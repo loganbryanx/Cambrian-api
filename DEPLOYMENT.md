@@ -8,6 +8,7 @@ This API is configured to deploy on Render using Docker.
 2) Connect repo: cambrian-api.
 3) Environment: Docker.
 4) Root directory: /.
+5) Dockerfile path: docker/Dockerfile.
 5) Health check path: /auth/health.
 6) Deploy.
 

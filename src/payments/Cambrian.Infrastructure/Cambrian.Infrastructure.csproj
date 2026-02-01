@@ -1,7 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Cambrian.Domain\Cambrian.Domain.csproj" />
+    <ProjectReference Include="..\..\users\Cambrian.Domain\Cambrian.Domain.csproj" />
+    <ProjectReference Include="..\..\music\Cambrian.Application\Cambrian.Application.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

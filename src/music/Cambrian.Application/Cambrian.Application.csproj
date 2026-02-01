@@ -1,8 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Cambrian.Domain\Cambrian.Domain.csproj" />
-    <ProjectReference Include="..\Cambrian.Application\Cambrian.Application.csproj" />
+    <ProjectReference Include="..\..\users\Cambrian.Domain\Cambrian.Domain.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
