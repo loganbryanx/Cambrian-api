@@ -217,8 +217,25 @@ app.MapGet("/subscriptions/current", (HttpRequest request) =>
         return Results.Ok(sub);
     }
 
-    return Results.Ok(new SubscriptionRecord("Creator", "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1))));
+    return Results.Ok(ApiHelpers.GetDefaultPlan());
 }).WithName("SubscriptionCurrent");
+
+app.MapGet("/subscriptions/plans", () => Results.Ok(ApiHelpers.GetPlans()))
+    .WithName("SubscriptionPlans");
+
+app.MapPost("/subscriptions/update", (HttpRequest request, SubscriptionUpdateRequest payload) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? "member@cambrian.local";
+    var plan = ApiHelpers.GetPlans().FirstOrDefault(p => p.Plan.Equals(payload.Plan ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+    if (plan == null)
+    {
+        return Results.BadRequest(new { message = "Unknown plan." });
+    }
+
+    var updated = new SubscriptionRecord(plan.Plan, "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1)), plan.PriceMonthly, plan.Features);
+    subscriptionsByEmail[email] = updated;
+    return Results.Ok(updated);
+}).WithName("SubscriptionUpdate");
 
 app.MapGet("/admin/audit", () => Results.Ok(new { status = "ok" }))
     .WithName("AdminAudit");
@@ -296,7 +313,9 @@ record AiTrack(string Id, string Title, string Genre, string Tag);
 
 record SaleRecord(string Id, string Title, decimal Amount, DateOnly SoldOn);
 
-record SubscriptionRecord(string Plan, string Status, DateOnly RenewsOn);
+record SubscriptionRecord(string Plan, string Status, DateOnly RenewsOn, decimal PriceMonthly, string[] Features);
+
+record SubscriptionUpdateRequest(string? Plan);
 
 class AccountRecord
 {
@@ -377,7 +396,43 @@ static class ApiHelpers
 
         if (!subscriptions.ContainsKey(email))
         {
-            subscriptions[email] = new SubscriptionRecord("Creator", "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1)));
+            var creator = GetPlans().First(p => p.Plan == "Creator");
+            subscriptions[email] = new SubscriptionRecord(creator.Plan, "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1)), creator.PriceMonthly, creator.Features);
         }
     }
+
+    public static SubscriptionRecord GetDefaultPlan()
+    {
+        var listener = GetPlans().First(p => p.Plan == "Listener");
+        return new SubscriptionRecord(listener.Plan, "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1)), listener.PriceMonthly, listener.Features);
+    }
+
+    public static List<PlanDefinition> GetPlans()
+    {
+        return new List<PlanDefinition>
+        {
+            new PlanDefinition(
+                "Listener",
+                9m,
+                new[]
+                {
+                    "Stream published creator catalogs",
+                    "Curated listener playlists",
+                    "Standard support"
+                }
+            ),
+            new PlanDefinition(
+                "Creator",
+                29m,
+                new[]
+                {
+                    "Publish creator-owned tracks",
+                    "Sell licenses in marketplace",
+                    "Live streaming monetization"
+                }
+            )
+        };
+    }
 }
+
+record PlanDefinition(string Plan, decimal PriceMonthly, string[] Features);
