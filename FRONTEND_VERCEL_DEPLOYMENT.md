@@ -5,7 +5,7 @@ This guide explains how to deploy the **cambrian-app** frontend (Vite) to Vercel
 ## Architecture Overview
 
 - **Frontend**: cambrian-app (Vite/React) → Deploy to Vercel
-- **Backend**: Cambrian-api (.NET) → Deploy to Azure/AWS/Railway (see VERCEL_DEPLOYMENT.md)
+- **Backend**: Cambrian-api (.NET) → Deploy to Azure/AWS/Railway (see README.md Deployment section)
 
 ## Prerequisites
 

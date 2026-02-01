@@ -22,8 +22,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
             "http://localhost:5173",
             "http://localhost:5174",
-            "https://cambrian-app.vercel.app",           // Your Vercel production domain
-            "https://cambrian-app-*.vercel.app"          // Vercel preview deployments (won't work with wildcards in .WithOrigins)
+            "https://cambrian-app.vercel.app"           // Your Vercel production domain
         )
         .AllowAnyHeader()
         .AllowAnyMethod()
@@ -32,7 +31,7 @@ builder.Services.AddCors(options =>
 });
 ```
 
-**Note**: .NET's `WithOrigins()` doesn't support wildcards. For preview deployments, see Option 2.
+**Note**: .NET's `WithOrigins()` doesn't support wildcards. For Vercel preview deployments (e.g., `cambrian-app-git-*.vercel.app`), see Option 3.
 
 ### Option 2: Environment Variable Configuration (Recommended)
 
