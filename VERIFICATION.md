@@ -18,10 +18,10 @@ The health check endpoint confirms your API is running correctly.
 
 ### Test Command:
 ```bash
-curl https://YOUR-RENDER-API.onrender.com/auth/health
+curl https://your-render-api.onrender.com/auth/health
 ```
 
-**Replace `YOUR-RENDER-API` with your actual Render service name.**
+**Replace `your-render-api` with your actual Render service name.**
 
 ### Expected Response:
 ```json
@@ -63,7 +63,7 @@ Ensure your Vercel frontend is configured to use the correct Render API URL.
 
    ```
    Variable Name: VITE_API_URL (or NEXT_PUBLIC_API_URL, or similar)
-   Value: https://YOUR-RENDER-API.onrender.com
+   Value: https://your-render-api.onrender.com
    ```
 
    **Important:** Use your actual Render API URL, including `https://`
@@ -111,7 +111,7 @@ The API must allow requests from your Vercel frontend URL.
 curl -i -H "Origin: https://your-app.vercel.app" \
      -H "Access-Control-Request-Method: POST" \
      -X OPTIONS \
-     https://YOUR-RENDER-API.onrender.com/auth/login
+     https://your-render-api.onrender.com/auth/login
 ```
 
 ### Expected Response Headers:
@@ -248,7 +248,7 @@ For quick automated verification of API health and CORS:
 #!/bin/bash
 
 # Set your URLs
-RENDER_API_URL="https://YOUR-RENDER-API.onrender.com"
+RENDER_API_URL="https://your-render-api.onrender.com"
 VERCEL_URL="https://your-app.vercel.app"
 
 echo "=== Cambrian API Deployment Verification ==="

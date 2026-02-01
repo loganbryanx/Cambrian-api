@@ -5,7 +5,7 @@
 # and that CORS is configured for your Vercel frontend.
 
 # CONFIGURATION - Update these with your actual URLs
-RENDER_API_URL="https://YOUR-RENDER-API.onrender.com"
+RENDER_API_URL="https://your-render-api.onrender.com"
 VERCEL_URL="https://your-app.vercel.app"
 
 # Colors for output
@@ -20,9 +20,9 @@ echo "=========================================="
 echo ""
 
 # Check if URLs are configured
-if [[ $RENDER_API_URL == *"YOUR-RENDER-API"* ]]; then
+if [[ $RENDER_API_URL == *"your-render-api"* ]]; then
   echo -e "${RED}❌ Error: Please update RENDER_API_URL in this script${NC}"
-  echo "   Edit this file and replace YOUR-RENDER-API with your actual Render service name"
+  echo "   Edit this file and replace 'your-render-api' with your actual Render service name"
   exit 1
 fi
 
