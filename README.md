@@ -8,6 +8,17 @@ ASP.NET Core API organized by clean architecture layers.
 - API: https://github.com/Cambrian/cambrian-api
 - Infrastructure: https://github.com/Cambrian/cambrian-infra
 
+## Project Management
+
+**GitHub Project Board:** https://github.com/users/loganbryanx/projects
+
+To access the Cambrian project board:
+1. Visit the [Projects tab](https://github.com/users/loganbryanx/projects) under the organization/user account
+2. Look for the Cambrian project board with columns: Backlog, Frontend, API, Infra, Blocked, Done
+3. Issues from all three repositories (Frontend, API, Infrastructure) appear in one unified board
+
+This allows you to manage Cambrian as one product while still deploying repositories independently.
+
 ## Structure
 
 - src/
