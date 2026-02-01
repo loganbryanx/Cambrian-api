@@ -10,3 +10,5 @@ services:
         value: Production
       - key: ASPNETCORE_URLS
         value: http://+:3000
+      - key: Cors__AllowedOrigins
+        sync: false
