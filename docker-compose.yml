@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: cambrian-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cambrian
+      POSTGRES_USER: cambrian
+      POSTGRES_PASSWORD: cambrian
+    ports:
+      - "5432:5432"
+    volumes:
+      - cambrian_db_data:/var/lib/postgresql/data
+
+volumes:
+  cambrian_db_data:
