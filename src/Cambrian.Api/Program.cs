@@ -51,6 +51,13 @@ app.MapPost("/auth/register", (AuthRequest request) =>
         return Results.BadRequest(new { message = "Email and password are required." });
     }
 
+    var planName = string.IsNullOrWhiteSpace(request.Plan) ? "Listener" : request.Plan;
+    var plan = ApiHelpers.GetPlans().FirstOrDefault(p => p.Plan.Equals(planName, StringComparison.OrdinalIgnoreCase));
+    if (plan == null)
+    {
+        return Results.BadRequest(new { message = "Unknown plan." });
+    }
+
     if (users.ContainsKey(request.Email))
     {
         return Results.BadRequest(new { message = "Account already exists." });
@@ -61,13 +68,21 @@ app.MapPost("/auth/register", (AuthRequest request) =>
     {
         Id = Guid.NewGuid().ToString("N"),
         Email = request.Email,
-        Plan = "Creator",
+        Plan = plan.Plan,
         Region = "US",
         Status = "Active",
-        Membership = "Verified"
+        Membership = plan.Plan
     };
     accounts[request.Email] = account;
-    ApiHelpers.SeedCreatorData(request.Email, catalogsByEmail, licensesByEmail, streamsByEmail, aiTracksByEmail, salesByEmail, subscriptionsByEmail);
+
+    if (plan.Plan.Equals("Creator", StringComparison.OrdinalIgnoreCase))
+    {
+        ApiHelpers.SeedCreatorData(request.Email, catalogsByEmail, licensesByEmail, streamsByEmail, aiTracksByEmail, salesByEmail, subscriptionsByEmail);
+    }
+    else
+    {
+        ApiHelpers.SeedListenerData(request.Email, subscriptionsByEmail);
+    }
 
     return Results.Ok(new { token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()) });
 }).WithName("Register");
@@ -289,7 +304,7 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
 
-record AuthRequest(string Email, string Password);
+record AuthRequest(string Email, string Password, string? Plan);
 
 record SystemInfoRequest(string Key, string? Value);
 
@@ -405,6 +420,14 @@ static class ApiHelpers
     {
         var listener = GetPlans().First(p => p.Plan == "Listener");
         return new SubscriptionRecord(listener.Plan, "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1)), listener.PriceMonthly, listener.Features);
+    }
+
+    public static void SeedListenerData(string email, Dictionary<string, SubscriptionRecord> subscriptions)
+    {
+        if (!subscriptions.ContainsKey(email))
+        {
+            subscriptions[email] = GetDefaultPlan();
+        }
     }
 
     public static List<PlanDefinition> GetPlans()
