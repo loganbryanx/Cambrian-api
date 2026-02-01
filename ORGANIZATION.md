@@ -1,5 +1,7 @@
 # Cambrian Organization Structure
 
+> **📘 New to the organization?** See [SETUP_GUIDE.md](SETUP_GUIDE.md) for step-by-step instructions on creating the organization and repositories on GitHub.
+
 This repository is part of the **Cambrian** organization, which consists of three independent but interconnected repositories.
 
 ## The Three Repositories

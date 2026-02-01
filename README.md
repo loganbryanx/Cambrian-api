@@ -1,6 +1,7 @@
 # Cambrian API
 
-> **Part of the [Cambrian Organization](ORGANIZATION.md)** - Backend services and business logic
+> **Part of the [Cambrian Organization](ORGANIZATION.md)** - Backend services and business logic  
+> 📘 **Setting up the organization?** See [SETUP_GUIDE.md](SETUP_GUIDE.md)
 
 ASP.NET Core API organized by clean architecture layers.
 
