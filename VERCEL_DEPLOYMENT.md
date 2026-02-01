@@ -59,13 +59,11 @@ Add the following environment variables under **Project Settings** → **Environ
 
 If you have access to Vercel's Docker deployment:
 
-The included `Dockerfile` is already configured:
-- Uses .NET 8.0 SDK for build
-- Uses .NET 8.0 runtime for production
+The included `Dockerfile` is configured for .NET 10.0 (matching the project's target framework):
+- Uses .NET 10.0 SDK for build
+- Uses .NET 10.0 runtime for production
 - Exposes port 3000
 - Optimized multi-stage build
-
-Note: Update the Dockerfile to use .NET 10.0 if needed (the project currently targets .NET 10.0).
 
 ### 5. Deploy
 
