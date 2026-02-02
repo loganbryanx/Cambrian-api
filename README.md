@@ -29,7 +29,7 @@ dotnet test
 ```
 
 ```bash
-dotnet run --project src/auth/Cambrian.Api
+dotnet run --project src/Cambrian.Api
 ```
 
 ## Database

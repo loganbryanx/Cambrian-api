@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Npgsql;
 using Stripe;
 using Stripe.Checkout;
 
@@ -37,6 +39,8 @@ var accounts = new Dictionary<string, AccountRecord>(StringComparer.OrdinalIgnor
 var systemInfo = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 var secrets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 var catalogsByEmail = new Dictionary<string, List<CatalogTrack>>(StringComparer.OrdinalIgnoreCase);
+var uploadedTracksByEmail = new Dictionary<string, List<UploadedTrack>>(StringComparer.OrdinalIgnoreCase);
+var playbackRequestsByEmail = new Dictionary<string, List<PlaybackRequestRecord>>(StringComparer.OrdinalIgnoreCase);
 var publishedCatalog = new List<CatalogTrack>
 {
     new CatalogTrack(Guid.NewGuid().ToString("N"), "Aurora Run", "Skyline Audio", "Ambient", 29m, "Creator-owned"),
@@ -48,6 +52,14 @@ var streamsByEmail = new Dictionary<string, List<StreamSession>>(StringComparer.
 var aiTracksByEmail = new Dictionary<string, List<AiTrack>>(StringComparer.OrdinalIgnoreCase);
 var salesByEmail = new Dictionary<string, List<SaleRecord>>(StringComparer.OrdinalIgnoreCase);
 var subscriptionsByEmail = new Dictionary<string, SubscriptionRecord>(StringComparer.OrdinalIgnoreCase);
+var playEventsConnectionString = builder.Configuration["PLAY_EVENTS_CONNECTION_STRING"]
+    ?? builder.Configuration["CONNECTION_STRING"];
+var playEventsStore = new PlayEventsStore(playEventsConnectionString);
+var billingConnectionString = builder.Configuration["BILLING_CONNECTION_STRING"]
+    ?? builder.Configuration["CONNECTION_STRING"];
+var billingStore = new BillingStore(billingConnectionString);
+await playEventsStore.EnsureTableAsync();
+await billingStore.EnsureTablesAsync();
 
 StripeConfiguration.ApiKey = builder.Configuration["STRIPE_SECRET_KEY"];
 
@@ -149,6 +161,48 @@ app.MapGet("/catalog", (HttpRequest request) =>
     return Results.Ok(publishedCatalog);
 }).WithName("Catalog");
 
+app.MapPost("/tracks/upload", (HttpRequest request, TrackUploadRequest payload) =>
+{
+    if (string.IsNullOrWhiteSpace(payload.Title) || string.IsNullOrWhiteSpace(payload.Artist))
+    {
+        return Results.BadRequest(new { message = "Title and artist are required." });
+    }
+
+    var email = ApiHelpers.GetEmail(request) ?? "member@cambrian.local";
+    if (!uploadedTracksByEmail.TryGetValue(email, out var uploads))
+    {
+        uploads = new List<UploadedTrack>();
+        uploadedTracksByEmail[email] = uploads;
+    }
+
+    var uploaded = new UploadedTrack(
+        Guid.NewGuid().ToString("N"),
+        email,
+        payload.Title,
+        payload.Artist,
+        payload.Genre,
+        payload.DurationSeconds,
+        DateTimeOffset.UtcNow);
+
+    uploads.Add(uploaded);
+
+    if (!catalogsByEmail.TryGetValue(email, out var catalog))
+    {
+        catalog = new List<CatalogTrack>();
+        catalogsByEmail[email] = catalog;
+    }
+
+    catalog.Add(new CatalogTrack(
+        uploaded.Id,
+        uploaded.Title,
+        uploaded.Artist,
+        uploaded.Genre ?? "Unspecified",
+        payload.Price ?? 0m,
+        "Creator-owned"));
+
+    return Results.Ok(uploaded);
+}).WithName("TrackUpload");
+
 app.MapGet("/discover", (HttpRequest request) =>
 {
     var email = ApiHelpers.GetEmail(request) ?? accounts.Keys.FirstOrDefault();
@@ -210,6 +264,76 @@ app.MapPost("/stream/start", (HttpRequest request, StreamStartRequest payload) =
     sessions.Add(session);
     return Results.Ok(session);
 }).WithName("StreamStart");
+
+app.MapPost("/playback/request", async (HttpRequest request, PlaybackRequest payload) =>
+{
+    if (string.IsNullOrWhiteSpace(payload.TrackId))
+    {
+        return Results.BadRequest(new { message = "TrackId is required." });
+    }
+
+    var email = ApiHelpers.GetEmail(request) ?? "member@cambrian.local";
+    if (!playbackRequestsByEmail.TryGetValue(email, out var requests))
+    {
+        requests = new List<PlaybackRequestRecord>();
+        playbackRequestsByEmail[email] = requests;
+    }
+
+    var track = ApiHelpers.ResolveTrack(payload.TrackId, payload.Title, payload.Artist, catalogsByEmail, publishedCatalog);
+    var record = new PlaybackRequestRecord(
+        Guid.NewGuid().ToString("N"),
+        email,
+        payload.TrackId,
+        track?.Title ?? payload.Title,
+        track?.Artist ?? payload.Artist,
+        payload.Device,
+        payload.Source,
+        DateTimeOffset.UtcNow);
+
+    requests.Add(record);
+
+    if (playEventsStore.IsConfigured)
+    {
+        await playEventsStore.WriteAsync(new PlayEventRecord(
+            Guid.NewGuid().ToString("N"),
+            DateTimeOffset.UtcNow,
+            email,
+            payload.TrackId,
+            record.Title,
+            record.Artist,
+            payload.DurationSeconds,
+            payload.Source ?? "playback-request"));
+    }
+
+    return Results.Ok(new { requestId = record.Id, status = "accepted" });
+}).WithName("PlaybackRequest");
+
+app.MapPost("/play/events", async (HttpRequest request, PlayEventRequest payload) =>
+{
+    if (string.IsNullOrWhiteSpace(payload.TrackId))
+    {
+        return Results.BadRequest(new { message = "TrackId is required." });
+    }
+
+    if (!playEventsStore.IsConfigured)
+    {
+        return Results.Problem("Play event storage is not configured.");
+    }
+
+    var email = ApiHelpers.GetEmail(request);
+    var record = new PlayEventRecord(
+        Guid.NewGuid().ToString("N"),
+        DateTimeOffset.UtcNow,
+        email,
+        payload.TrackId,
+        payload.Title,
+        payload.Artist,
+        payload.DurationSeconds,
+        payload.Source);
+
+    await playEventsStore.WriteAsync(record);
+    return Results.Accepted();
+}).WithName("PlayEvents");
 
 app.MapPost("/stream/stop", (HttpRequest request, StreamStopRequest payload) =>
 {
@@ -344,6 +468,10 @@ app.MapPost("/billing/webhook", async (HttpRequest request, IConfiguration confi
                     ? new SubscriptionRecord(planDefinition.Plan, "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1)), planDefinition.PriceMonthly, planDefinition.Features)
                     : ApiHelpers.GetDefaultPlan();
                 subscriptionsByEmail[email] = subscription;
+                if (billingStore.IsConfigured)
+                {
+                    await billingStore.WriteSubscriptionAsync(email, subscription, session.Id, session.SubscriptionId);
+                }
             }
         }
     }
@@ -362,6 +490,10 @@ app.MapPost("/subscriptions/update", (HttpRequest request, SubscriptionUpdateReq
 
     var updated = new SubscriptionRecord(plan.Plan, "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1)), plan.PriceMonthly, plan.Features);
     subscriptionsByEmail[email] = updated;
+    if (billingStore.IsConfigured)
+    {
+        _ = billingStore.WriteSubscriptionAsync(email, updated, null, null);
+    }
     return Results.Ok(updated);
 }).WithName("SubscriptionUpdate");
 
@@ -431,6 +563,16 @@ record LicenseRecord(string Id, string Title, string Status, DateOnly PurchasedO
 
 record SaveLibraryRequest(string TrackId, string? Title, string? Artist);
 
+record TrackUploadRequest(string Title, string Artist, string? Genre, int? DurationSeconds, decimal? Price);
+
+record PlaybackRequest(
+    string TrackId,
+    string? Title,
+    string? Artist,
+    int? DurationSeconds,
+    string? Device,
+    string? Source);
+
 class StreamSession
 {
     public string? Id { get; set; }
@@ -448,6 +590,37 @@ record SubscriptionRecord(string Plan, string Status, DateOnly RenewsOn, decimal
 record SubscriptionUpdateRequest(string? Plan);
 
 record CheckoutRequest(string? Plan, string? Email);
+
+record PlayEventRequest(string TrackId, string? Title, string? Artist, int? DurationSeconds, string? Source);
+
+record PlayEventRecord(
+    string Id,
+    DateTimeOffset OccurredAt,
+    string? Email,
+    string TrackId,
+    string? Title,
+    string? Artist,
+    int? DurationSeconds,
+    string? Source);
+
+record UploadedTrack(
+    string Id,
+    string OwnerEmail,
+    string Title,
+    string Artist,
+    string? Genre,
+    int? DurationSeconds,
+    DateTimeOffset UploadedAt);
+
+record PlaybackRequestRecord(
+    string Id,
+    string Email,
+    string TrackId,
+    string? Title,
+    string? Artist,
+    string? Device,
+    string? Source,
+    DateTimeOffset RequestedAt);
 
 class AccountRecord
 {
@@ -573,6 +746,201 @@ static class ApiHelpers
             )
         };
     }
+
+    public static CatalogTrack? ResolveTrack(
+        string trackId,
+        string? title,
+        string? artist,
+        Dictionary<string, List<CatalogTrack>> catalogs,
+        List<CatalogTrack> publishedCatalog)
+    {
+        foreach (var catalog in catalogs.Values)
+        {
+            var match = catalog.FirstOrDefault(t => t.Id == trackId);
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        var published = publishedCatalog.FirstOrDefault(t => t.Id == trackId);
+        if (published != null)
+        {
+            return published;
+        }
+
+        if (!string.IsNullOrWhiteSpace(title) || !string.IsNullOrWhiteSpace(artist))
+        {
+            return new CatalogTrack(trackId, title ?? "Unknown", artist ?? "Unknown", "Unknown", 0m, "Unknown");
+        }
+
+        return null;
+    }
 }
 
 record PlanDefinition(string Plan, decimal PriceMonthly, string[] Features);
+
+class BillingStore
+{
+    private readonly string? _connectionString;
+
+    public BillingStore(string? connectionString)
+    {
+        _connectionString = connectionString;
+    }
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(_connectionString);
+
+    public async Task EnsureTablesAsync()
+    {
+        if (!IsConfigured)
+        {
+            return;
+        }
+
+        await using var dataSource = NpgsqlDataSource.Create(_connectionString!);
+        await using var cmd = dataSource.CreateCommand(@"
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                plan TEXT NOT NULL,
+                status TEXT NOT NULL,
+                renews_on DATE NOT NULL,
+                price_monthly NUMERIC(10,2) NOT NULL,
+                features JSONB NOT NULL,
+                stripe_session_id TEXT NULL,
+                stripe_subscription_id TEXT NULL,
+                recorded_at TIMESTAMPTZ NOT NULL
+            );
+        ");
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task WriteSubscriptionAsync(string email, SubscriptionRecord subscription, string? sessionId, string? stripeSubscriptionId)
+    {
+        if (!IsConfigured)
+        {
+            throw new InvalidOperationException("Billing storage is not configured.");
+        }
+
+        var id = Guid.NewGuid().ToString("N");
+        var featuresJson = JsonSerializer.Serialize(subscription.Features);
+
+        await using var dataSource = NpgsqlDataSource.Create(_connectionString!);
+        await using var cmd = dataSource.CreateCommand(@"
+            INSERT INTO subscriptions (
+                id,
+                email,
+                plan,
+                status,
+                renews_on,
+                price_monthly,
+                features,
+                stripe_session_id,
+                stripe_subscription_id,
+                recorded_at
+            ) VALUES (
+                @id,
+                @email,
+                @plan,
+                @status,
+                @renews_on,
+                @price_monthly,
+                @features,
+                @stripe_session_id,
+                @stripe_subscription_id,
+                @recorded_at
+            );
+        ");
+
+        cmd.Parameters.AddWithValue("id", id);
+        cmd.Parameters.AddWithValue("email", email);
+        cmd.Parameters.AddWithValue("plan", subscription.Plan);
+        cmd.Parameters.AddWithValue("status", subscription.Status);
+        cmd.Parameters.AddWithValue("renews_on", subscription.RenewsOn.ToDateTime(TimeOnly.MinValue));
+        cmd.Parameters.AddWithValue("price_monthly", subscription.PriceMonthly);
+        cmd.Parameters.AddWithValue("features", NpgsqlTypes.NpgsqlDbType.Jsonb, featuresJson);
+        cmd.Parameters.AddWithValue("stripe_session_id", (object?)sessionId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("stripe_subscription_id", (object?)stripeSubscriptionId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("recorded_at", DateTimeOffset.UtcNow);
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+}
+
+class PlayEventsStore
+{
+    private readonly string? _connectionString;
+
+    public PlayEventsStore(string? connectionString)
+    {
+        _connectionString = connectionString;
+    }
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(_connectionString);
+
+    public async Task EnsureTableAsync()
+    {
+        if (!IsConfigured)
+        {
+            return;
+        }
+
+        await using var dataSource = NpgsqlDataSource.Create(_connectionString!);
+        await using var cmd = dataSource.CreateCommand(@"
+            CREATE TABLE IF NOT EXISTS play_events (
+                id TEXT PRIMARY KEY,
+                occurred_at TIMESTAMPTZ NOT NULL,
+                email TEXT NULL,
+                track_id TEXT NOT NULL,
+                title TEXT NULL,
+                artist TEXT NULL,
+                duration_seconds INTEGER NULL,
+                source TEXT NULL
+            );
+        ");
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task WriteAsync(PlayEventRecord record)
+    {
+        if (!IsConfigured)
+        {
+            throw new InvalidOperationException("Play events storage is not configured.");
+        }
+
+        await using var dataSource = NpgsqlDataSource.Create(_connectionString!);
+        await using var cmd = dataSource.CreateCommand(@"
+            INSERT INTO play_events (
+                id,
+                occurred_at,
+                email,
+                track_id,
+                title,
+                artist,
+                duration_seconds,
+                source
+            ) VALUES (
+                @id,
+                @occurred_at,
+                @email,
+                @track_id,
+                @title,
+                @artist,
+                @duration_seconds,
+                @source
+            );
+        ");
+
+        cmd.Parameters.AddWithValue("id", record.Id);
+        cmd.Parameters.AddWithValue("occurred_at", record.OccurredAt);
+        cmd.Parameters.AddWithValue("email", (object?)record.Email ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("track_id", record.TrackId);
+        cmd.Parameters.AddWithValue("title", (object?)record.Title ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("artist", (object?)record.Artist ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("duration_seconds", (object?)record.DurationSeconds ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("source", (object?)record.Source ?? DBNull.Value);
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+}

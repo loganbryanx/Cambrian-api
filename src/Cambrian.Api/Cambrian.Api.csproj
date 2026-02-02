@@ -9,11 +9,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
     <PackageReference Include="Stripe.net" Version="47.3.0" />
+    <PackageReference Include="Npgsql" Version="9.0.2" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Cambrian.Application\Cambrian.Application.csproj" />
-    <ProjectReference Include="..\Cambrian.Infrastructure\Cambrian.Infrastructure.csproj" />
+    <ProjectReference Include="..\music\Cambrian.Application\Cambrian.Application.csproj" />
+    <ProjectReference Include="..\payments\Cambrian.Infrastructure\Cambrian.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
