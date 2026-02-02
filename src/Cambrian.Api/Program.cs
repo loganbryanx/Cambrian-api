@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Npgsql;
 using Stripe;
 using Stripe.Checkout;
@@ -73,6 +73,9 @@ static bool IsStripeConfigured(IConfiguration config)
 
 app.MapGet("/auth/health", () => Results.Ok(new { status = "ok" }))
     .WithName("AuthHealth");
+
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
+    .WithName("RootHealth");
 
 app.MapPost("/auth/register", (AuthRequest request) =>
 {
