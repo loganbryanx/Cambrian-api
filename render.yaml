@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: cambrian-api
+    runtime: docker
+    repo: https://github.com/loganbryanx/Cambrian-api
+    branch: main
+    autoDeploy: true
+    dockerfilePath: ./docker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://+:10000
+      - key: CORS_ORIGINS
+        value: https://cambrian-blush.vercel.app,http://localhost:5173

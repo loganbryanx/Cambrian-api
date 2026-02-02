@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Npgsql;
 using Stripe;
 using Stripe.Checkout;
@@ -6,7 +6,6 @@ using Stripe.Checkout;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevCors", policy =>
@@ -27,9 +26,9 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    }
+    app.UseHttpsRedirection();
+}
 
-app.UseHttpsRedirection();
 app.UseCors("DevCors");
 
 var users = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -41,15 +40,16 @@ var uploadedTracksByEmail = new Dictionary<string, List<UploadedTrack>>(StringCo
 var playbackRequestsByEmail = new Dictionary<string, List<PlaybackRequestRecord>>(StringComparer.OrdinalIgnoreCase);
 var publishedCatalog = new List<CatalogTrack>
 {
-    new CatalogTrack(Guid.NewGuid().ToString("N"), "Aurora Run", "Skyline Audio", "Ambient", 29m, "Creator-owned"),
-    new CatalogTrack(Guid.NewGuid().ToString("N"), "Pulse Index", "Nova Loop", "Electro", 39m, "Creator-owned"),
-    new CatalogTrack(Guid.NewGuid().ToString("N"), "Echo Bloom", "Signal North", "Chill", 25m, "Creator-owned")
+    new CatalogTrack(Guid.NewGuid().ToString("N"), "Aurora Run", "Skyline Audio", "Ambient", 29m, "Creator-owned", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", "https://picsum.photos/seed/aurora/300/300", "Northern Lights", 243),
+    new CatalogTrack(Guid.NewGuid().ToString("N"), "Pulse Index", "Nova Loop", "Electro", 39m, "Creator-owned", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", "https://picsum.photos/seed/pulse/300/300", "Digital Dreams", 198),
+    new CatalogTrack(Guid.NewGuid().ToString("N"), "Echo Bloom", "Signal North", "Chill", 25m, "Creator-owned", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", "https://picsum.photos/seed/echo/300/300", "Reflections", 267)
 };
 var licensesByEmail = new Dictionary<string, List<LicenseRecord>>(StringComparer.OrdinalIgnoreCase);
 var streamsByEmail = new Dictionary<string, List<StreamSession>>(StringComparer.OrdinalIgnoreCase);
 var aiTracksByEmail = new Dictionary<string, List<AiTrack>>(StringComparer.OrdinalIgnoreCase);
 var salesByEmail = new Dictionary<string, List<SaleRecord>>(StringComparer.OrdinalIgnoreCase);
 var subscriptionsByEmail = new Dictionary<string, SubscriptionRecord>(StringComparer.OrdinalIgnoreCase);
+var invoicesByEmail = new Dictionary<string, List<InvoiceRecord>>(StringComparer.OrdinalIgnoreCase);
 var playEventsConnectionString = builder.Configuration["PLAY_EVENTS_CONNECTION_STRING"]
     ?? builder.Configuration["CONNECTION_STRING"];
 var playEventsStore = new PlayEventsStore(playEventsConnectionString);
@@ -130,6 +130,33 @@ app.MapPost("/auth/login", (AuthRequest request) =>
     return Results.Ok(new { token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()) });
 }).WithName("Login");
 
+app.MapPost("/auth/password", (HttpRequest request, PasswordChangeRequest payload) =>
+{
+    var email = ApiHelpers.GetEmail(request);
+    if (string.IsNullOrWhiteSpace(email) || !users.ContainsKey(email))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (string.IsNullOrWhiteSpace(payload.CurrentPassword) || string.IsNullOrWhiteSpace(payload.NewPassword))
+    {
+        return Results.BadRequest(new { message = "Current password and new password are required." });
+    }
+
+    if (users[email] != payload.CurrentPassword)
+    {
+        return Results.BadRequest(new { message = "Current password is incorrect." });
+    }
+
+    if (payload.NewPassword.Length < 8)
+    {
+        return Results.BadRequest(new { message = "New password must be at least 8 characters long." });
+    }
+
+    users[email] = payload.NewPassword;
+    return Results.Ok(new { message = "Password changed successfully." });
+}).WithName("PasswordChange");
+
 app.MapGet("/data/account", (HttpRequest request) =>
 {
     var email = request.Headers["x-email"].FirstOrDefault();
@@ -169,6 +196,11 @@ app.MapPost("/tracks/upload", (HttpRequest request, TrackUploadRequest payload) 
         return Results.BadRequest(new { message = "Title and artist are required." });
     }
 
+    if (string.IsNullOrWhiteSpace(payload.AudioUrl))
+    {
+        return Results.BadRequest(new { message = "Audio URL is required for streaming." });
+    }
+
     var email = ApiHelpers.GetEmail(request) ?? "member@cambrian.local";
     if (!uploadedTracksByEmail.TryGetValue(email, out var uploads))
     {
@@ -183,7 +215,13 @@ app.MapPost("/tracks/upload", (HttpRequest request, TrackUploadRequest payload) 
         payload.Artist,
         payload.Genre,
         payload.DurationSeconds,
-        DateTimeOffset.UtcNow);
+        DateTimeOffset.UtcNow,
+        payload.AudioUrl,
+        payload.CoverImageUrl,
+        payload.Album,
+        payload.ReleaseDate,
+        payload.Bpm,
+        payload.Lyrics);
 
     uploads.Add(uploaded);
 
@@ -199,7 +237,11 @@ app.MapPost("/tracks/upload", (HttpRequest request, TrackUploadRequest payload) 
         uploaded.Artist,
         uploaded.Genre ?? "Unspecified",
         payload.Price ?? 0m,
-        "Creator-owned"));
+        "Creator-owned",
+        payload.AudioUrl,
+        payload.CoverImageUrl,
+        payload.Album,
+        payload.DurationSeconds));
 
     return Results.Ok(uploaded);
 }).WithName("TrackUpload");
@@ -234,8 +276,13 @@ app.MapPost("/purchase/library", (HttpRequest request, SaveLibraryRequest payloa
         licensesByEmail[email] = items;
     }
 
-    var title = payload.Title ?? publishedCatalog.FirstOrDefault(t => t.Id == payload.TrackId)?.Title ?? "Saved track";
-    items.Add(new LicenseRecord(Guid.NewGuid().ToString("N"), title, "Saved", DateOnly.FromDateTime(DateTime.UtcNow)));
+    var track = publishedCatalog.FirstOrDefault(t => t.Id == payload.TrackId);
+    var title = payload.Title ?? track?.Title ?? "Saved track";
+    var artist = payload.Artist ?? track?.Artist;
+    var genre = track?.Genre;
+    var audioUrl = track?.AudioUrl;
+    var coverImageUrl = track?.CoverImageUrl;
+    items.Add(new LicenseRecord(Guid.NewGuid().ToString("N"), title, "Saved", DateOnly.FromDateTime(DateTime.UtcNow), artist, genre, audioUrl, coverImageUrl));
     return Results.Ok(items);
 }).WithName("PurchaseLibrarySave");
 
@@ -498,6 +545,36 @@ app.MapPost("/subscriptions/update", (HttpRequest request, SubscriptionUpdateReq
     return Results.Ok(updated);
 }).WithName("SubscriptionUpdate");
 
+app.MapGet("/billing/invoices", (HttpRequest request) =>
+{
+    var email = ApiHelpers.GetEmail(request) ?? "member@cambrian.local";
+    if (!invoicesByEmail.TryGetValue(email, out var invoices))
+    {
+        invoices = new List<InvoiceRecord>();
+        invoicesByEmail[email] = invoices;
+    }
+
+    if (invoices.Count == 0 && subscriptionsByEmail.TryGetValue(email, out var subscription))
+    {
+        // Generate sample invoices
+        invoices.Add(new InvoiceRecord(
+            "inv_001",
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30)),
+            subscription.PriceMonthly,
+            "Paid",
+            $"https://invoice.stripe.com/inv_001"));
+        invoices.Add(new InvoiceRecord(
+            "inv_002",
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-60)),
+            subscription.PriceMonthly,
+            "Paid",
+            $"https://invoice.stripe.com/inv_002"));
+        invoicesByEmail[email] = invoices;
+    }
+
+    return Results.Ok(invoices);
+}).WithName("BillingInvoices");
+
 app.MapGet("/admin/audit", () => Results.Ok(new { status = "ok" }))
     .WithName("AdminAudit");
 
@@ -558,13 +635,17 @@ record StreamStartRequest(string TrackId, string? Title);
 
 record StreamStopRequest(string StreamId);
 
-record CatalogTrack(string Id, string Title, string Artist, string Genre, decimal Price, string Rights);
+record CatalogTrack(string Id, string Title, string Artist, string Genre, decimal Price, string Rights, string? AudioUrl = null, string? CoverImageUrl = null, string? Album = null, int? DurationSeconds = null);
 
-record LicenseRecord(string Id, string Title, string Status, DateOnly PurchasedOn);
+record LicenseRecord(string Id, string Title, string Status, DateOnly PurchasedOn, string? Artist = null, string? Genre = null, string? AudioUrl = null, string? CoverImageUrl = null);
+
+record PasswordChangeRequest(string CurrentPassword, string NewPassword);
+
+record InvoiceRecord(string Id, DateOnly Date, decimal Amount, string Status, string? DownloadUrl = null);
 
 record SaveLibraryRequest(string TrackId, string? Title, string? Artist);
 
-record TrackUploadRequest(string Title, string Artist, string? Genre, int? DurationSeconds, decimal? Price);
+record TrackUploadRequest(string Title, string Artist, string? Genre, int? DurationSeconds, decimal? Price, string? AudioUrl, string? CoverImageUrl, string? Album, DateOnly? ReleaseDate, int? Bpm, string? Lyrics);
 
 record PlaybackRequest(
     string TrackId,
@@ -611,7 +692,13 @@ record UploadedTrack(
     string Artist,
     string? Genre,
     int? DurationSeconds,
-    DateTimeOffset UploadedAt);
+    DateTimeOffset UploadedAt,
+    string? AudioUrl = null,
+    string? CoverImageUrl = null,
+    string? Album = null,
+    DateOnly? ReleaseDate = null,
+    int? Bpm = null,
+    string? Lyrics = null);
 
 record PlaybackRequestRecord(
     string Id,
@@ -653,9 +740,9 @@ static class ApiHelpers
         {
             catalogs[email] = new List<CatalogTrack>
             {
-                new CatalogTrack(Guid.NewGuid().ToString("N"), "Neon Echoes", "Creator Studio", "Synthwave", 49m, "Creator-owned"),
-                new CatalogTrack(Guid.NewGuid().ToString("N"), "Aurora Drift", "Creator Studio", "Ambient", 39m, "Creator-owned"),
-                new CatalogTrack(Guid.NewGuid().ToString("N"), "Circuit Bloom", "Creator Studio", "Electro", 59m, "Creator-owned")
+                new CatalogTrack(Guid.NewGuid().ToString("N"), "Neon Echoes", "Creator Studio", "Synthwave", 49m, "Creator-owned", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", "https://picsum.photos/seed/neon/300/300", "Retro Wave", 312),
+                new CatalogTrack(Guid.NewGuid().ToString("N"), "Aurora Drift", "Creator Studio", "Ambient", 39m, "Creator-owned", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3", "https://picsum.photos/seed/drift/300/300", "Cosmic Journey", 287),
+                new CatalogTrack(Guid.NewGuid().ToString("N"), "Circuit Bloom", "Creator Studio", "Electro", 59m, "Creator-owned", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3", "https://picsum.photos/seed/circuit/300/300", "Electric Life", 334)
             };
         }
 
@@ -663,8 +750,8 @@ static class ApiHelpers
         {
             licenses[email] = new List<LicenseRecord>
             {
-                new LicenseRecord(Guid.NewGuid().ToString("N"), "Neon Echoes", "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-2))),
-                new LicenseRecord(Guid.NewGuid().ToString("N"), "Aurora Drift", "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-10)))
+                new LicenseRecord(Guid.NewGuid().ToString("N"), "Neon Echoes", "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-2)), "Creator Studio", "Synthwave", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", "https://picsum.photos/seed/neon/300/300"),
+                new LicenseRecord(Guid.NewGuid().ToString("N"), "Aurora Drift", "Active", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-10)), "Creator Studio", "Ambient", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3", "https://picsum.photos/seed/drift/300/300")
             };
         }
 

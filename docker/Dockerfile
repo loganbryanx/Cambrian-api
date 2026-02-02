@@ -11,8 +11,9 @@ RUN dotnet publish "src/Cambrian.Api/Cambrian.Api.csproj" -c Release -o /app/pub
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
-ENV ASPNETCORE_URLS=http://+:3000
-EXPOSE 3000
+# Use PORT environment variable from Render, fallback to 3000 for local/AWS
+ENV ASPNETCORE_URLS=http://0.0.0.0:${PORT:-3000}
+EXPOSE ${PORT:-3000}
 
 COPY --from=build /app/publish ./
 
